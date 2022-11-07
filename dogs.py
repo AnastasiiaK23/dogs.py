@@ -2,66 +2,47 @@ import io
 import streamlit as st
 from PIL import Image
 import numpy as np
-import tensorflow as tf
-import tensorflow_datasets as tfds
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
-from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
-import matplotlib.pyplot as plt
-from google.colab import files
+from tensorflow.keras.applications import EfficientNetB0
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications.efficientnet import preprocess_input, decode_predictions
 
-SIZE = (224, 224)
 
-def resize_image(img, label):
-	img = tf.cast(img, tf.float32)
-	img = tf.image.resize(img, SIZE)
-	img /= 255.0
-	return img, label      
+@st.cache(allow_output_mutation=True)
+def load_model():
+    return EfficientNetB0(weights='imagenet')
 
-train_resized = train[0].map(resize_image)
-train_batches = train_resized.shuffle(1000).batch(16)
 
-# Создание основного слоя для создания модели
-base_layers = tf.keras.applications.MobileNetV2(input_shape=(SIZE[0], SIZE[1], 3), include_top=False)
+def preprocess_image(img):
+    img = img.resize((224, 224))
+    x = image.img_to_array(img)
+    x = np.expand_dims(x, axis=0)
+    x = preprocess_input(x)
+    return x
 
-# Создание модели нейронной сети
-model = tf.keras.Sequential([
-	base_layers,
-	GlobalAveragePooling2D(),
-	Dropout(0.2),
-	Dense(1)
-])
-model.compile(optimizer='adam', loss=tf.keras.losses.BinaryCrossentropy(from_logits=True), metrics=['accuracy'])
-
-model.fit(train_batches, epochs=1)
 
 def load_image():
-    uploaded_file = st. file_uploader(label= "Виберіть зображення для розпізнання")
+    uploaded_file = st.file_uploader(label='Выберите изображение для распознавания')
     if uploaded_file is not None:
         image_data = uploaded_file.getvalue()
-        st. image(image_data)
+        st.image(image_data)
         return Image.open(io.BytesIO(image_data))
     else:
         return None
 
-images = ['1.jpg','4.jpg', '3.jpg', '5.jpg', '2.jpg', '6.jpg']
 
-# Перебираем все изображения и даем нейронке шанс определить что находиться на фото
-for i in images:
-	img = load_img(i)
-	img_array = img_to_array(img)
-	img_resized, _ = resize_image(img_array, _)
-	img_expended = np.expand_dims(img_resized, axis=0)
-	prediction = model.predict(img_expended)
-	plt.figure()
-	plt.imshow(img)
-	label = 'Собачка' if prediction > 0 else 'Кошка'
-	plt.title('{}'.format(label))
+def print_predictions(preds):
+    classes = decode_predictions(preds, top=3)[0]
+    for cl in classes:
+        st.write(cl[1], cl[2])
 
-st.title( "Класифікувати зображення")
+
+model = load_model()
+
+st.title('Классификации изображений в облаке Streamlit')
 img = load_image()
-result = st.button('Розпізнати зображення')
+result = st.button('Распознать изображение')
 if result:
-    x = preprocess_image(ing)
+    x = preprocess_image(img)
     preds = model.predict(x)
-    st.write('Результат розпізнання:')
-    print_predictions (preds)
+    st.write('**Результаты распознавания:**')
+    print_predictions(preds)
